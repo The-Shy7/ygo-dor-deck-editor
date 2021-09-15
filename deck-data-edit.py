@@ -67,3 +67,24 @@ class YugiohDeckEntry(QListWidgetItem):
         self.is_starter = starter
         self.number = number
         self.deck_offset = offset
+
+def set_default_path(path):
+    print("WRITING", path)
+    
+    try:
+        with open("default_path2.cfg", "wb") as f:
+            f.write(bytes(path, encoding="utf-8"))
+    except Exception as error:
+        print("couldn't write path")
+        traceback.print_exc()
+        pass
+
+def get_default_path():
+    print("READING")
+    
+    try:
+        with open("default_path2.cfg", "rb") as f:
+            path = str(f.read(), encoding="utf-8")
+        return path
+    except:
+        return None
