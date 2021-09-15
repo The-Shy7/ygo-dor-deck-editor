@@ -2,8 +2,13 @@ import traceback
 import re
 from os import path
 
+from PyQt5.QtCore import QSize, QRect, QMetaObject, QCoreApplication
+from PyQt5.QtWidgets import (QWidget, QMainWindow, QFileDialog,
+                             QSpacerItem, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QHBoxLayout,
+                             QScrollArea, QGridLayout, QMenuBar, QMenu, QAction, QApplication, QStatusBar, QListWidget,
+                             QLineEdit, QTextEdit, QListWidgetItem)
 import PyQt5.QtWidgets as QtWidgets
-from PyQt5.QtWidgets import QListWidgetItem
+import PyQt5.QtCore as QtCore
 
 STARTER_DECK_OFFSET = 0x2A0A70
 CPU_DECK_OFFSET = 0x2A1316
@@ -88,3 +93,27 @@ def get_default_path():
         return path
     except:
         return None
+
+class DeckEditorMainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setup_ui()
+        self.stringfile = None
+        self.reset_in_process = False
+        path = get_default_path()
+        
+        if path is None:
+            self.default_path = ""
+        else:
+            self.default_path = path
+
+        self.deck_list.currentItemChanged.connect(self.action_listwidget_change_item)
+        self.button_set_deck.pressed.connect(self.action_button_set_deck)
+        self.deck_data = None
+        
+    def reset(self):
+        self.reset_in_process = True
+        self.deck_list.clearSelection()
+        self.deck_list.clear()
+
+        self.reset_in_process = False
