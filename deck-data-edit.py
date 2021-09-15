@@ -1,4 +1,5 @@
 import traceback
+import re
 from os import path
 
 import PyQt5.QtWidgets as QtWidgets
