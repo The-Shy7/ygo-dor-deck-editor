@@ -117,3 +117,136 @@ class DeckEditorMainWindow(QMainWindow):
         self.deck_list.clear()
 
         self.reset_in_process = False
+
+    def action_button_set_deck(self):
+        print("I was pressed")
+        current = self.deck_list.currentItem()
+        self.statusbar.clearMessage()
+        
+        if current is not None and self.deck_data is not None:
+            try:
+                leader, rank = self.lineedit_leader.text(), self.lineedit_leader_rank.text()
+
+                deck_data = []
+
+                if rank.isnumeric():
+                    rank = int(rank)
+                else:
+                    self.statusbar.showMessage("Rank is not numeric")
+                    return
+
+                if leader.isnumeric():
+                    leaderdata = (int(leader) & 0xFFF) | ((rank & 0xF) << 12)
+                else:
+                    match = match_partly(leader)
+
+                    if isinstance(match, tuple) and match[0] is None:
+                        self.statusbar.showMessage("No matching card found: '{0}'".format(leader))
+                        return
+                    elif isinstance(match, tuple):
+                        index, card = match
+                        leaderdata = (int(index) & 0xFFF) | ((rank & 0xF) << 12)
+                    else:
+                        if len(match) > 5:
+                            self.statusbar.showMessage("Too many matches found ({0} matches)".format(len(match)))
+                        else:
+                            self.statusbar.showMessage("More than 1 match found: {0}".format(
+                                ", ".join("{0} ({1})".format(x[1], x[0]) for x in match)))
+                        return
+
+                deck_data.append(leaderdata)
+                cards = []
+                
+                for i in range(40):
+                    textedit, indexlabel, cardname = self.card_slots[i][0:3]
+                    card = textedit.text()
+                    
+                    if card.isnumeric():
+                        card = int(card) & 0xFFF
+                        deck_data.append(card)
+                    else:
+                        match = match_partly(card)
+
+                        if isinstance(match, tuple) and match[0] is None:
+                            self.statusbar.showMessage("No matching card found: '{0}'".format(card))
+                            return
+                        elif isinstance(match, tuple):
+                            index, card = match
+
+                            deck_data.append(index)
+                        else:
+                            if len(match) > 5:
+                                self.statusbar.showMessage("Too many matches found ({0} matches)".format(len(match)))
+                            else:
+                                self.statusbar.showMessage("More than 1 match found: {0}".format(
+                                    ", ".join("{0} ({1})".format(x[1], x[0]) for x in match)))
+                            return
+
+                if current.is_starter:
+                    current.setText("[Starter] {0:>7} [rank:{1:>2}] {2}".format(leaderdata&0xFFF,
+                                                                                rank, get_name(leaderdata & 0xFFF)))
+                else:
+
+                    current.setText("[CPU] {0:>7} [rank:{1:>2}] {2}".format(leaderdata&0xFFF,
+                                                                            rank, get_name(leaderdata & 0xFFF)))
+
+                self.leader_label.setText(get_name(leaderdata & 0xFFF))
+                self.lineedit_leader.setText(str(leaderdata & 0xFFF))
+                print(len(deck_data))
+                
+                for i in range(40):
+                    card = deck_data[1+i]
+                    textedit, indexlabel, cardname = self.card_slots[i][0:3]
+                    textedit.setText(str(card))
+                    cardname.setText(get_name(card))
+
+                print(type(self.deck_data))
+                struct.pack_into("H"*41, self.deck_data, current.number*41*2, *deck_data)
+            except:
+                traceback.print_exc()
+
+    def button_load_decks(self):
+        try:
+            # implement
+        except:
+            # implement
+
+    def action_listwidget_change_item(self, current, previous):
+        try:
+            if current is not None:
+                print(current, current.number, current.deck_offset)
+                leader = struct.unpack_from("H", self.deck_data, current.number*41*2)[0]
+                rank = leader >> 12
+                leader_card = leader & 0xFFF
+                self.lineedit_leader.setText(str(leader_card))
+                self.lineedit_leader_rank.setText(str(rank))
+                self.leader_label.setText(get_name(leader_card))
+
+                for i in range(40):
+                    card = struct.unpack_from("H", self.deck_data, current.number*41*2 + 2 + i*2)[0] & 0xFFF
+                    textedit, indexlabel, cardname = self.card_slots[i][0:3]
+                    textedit.setText(str(card))
+                    cardname.setText(get_name(card))
+        except:
+            traceback.print_exc()
+            raise
+
+    def button_save_decks(self):
+        if self.deck_data is not None:
+            filepath, chosentype = QFileDialog.getSaveFileName(
+                self, "Save File",
+                self.default_path,
+                "PS2 iso (*.iso);;All files (*)")
+            print(filepath, "saved")
+            
+            if filepath:
+                with open(filepath, "r+b") as f:
+                    f.seek(STARTER_DECK_OFFSET)
+                    f.write(self.deck_data[0:17*41*2])
+                    f.seek(CPU_DECK_OFFSET)
+                    f.write(self.deck_data[17*41*2:17*41*2+24*41*2])
+                    
+                self.default_path = filepath
+                set_default_path(filepath)
+        else:
+            pass # no level loaded, do nothing
