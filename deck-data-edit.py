@@ -115,7 +115,6 @@ class DeckEditorMainWindow(QMainWindow):
         self.reset_in_process = True
         self.deck_list.clearSelection()
         self.deck_list.clear()
-
         self.reset_in_process = False
 
     def action_button_set_deck(self):
@@ -126,7 +125,6 @@ class DeckEditorMainWindow(QMainWindow):
         if current is not None and self.deck_data is not None:
             try:
                 leader, rank = self.lineedit_leader.text(), self.lineedit_leader_rank.text()
-
                 deck_data = []
 
                 if rank.isnumeric():
@@ -207,9 +205,53 @@ class DeckEditorMainWindow(QMainWindow):
 
     def button_load_decks(self):
         try:
-            # implement
-        except:
-            # implement
+            print("ok", self.default_path)
+            self.xmlPath = ""
+            filepath, chosentype = QFileDialog.getOpenFileName(
+                self, "Open File",
+                self.default_path,
+                "PS2 iso (*.iso);;All files (*)")
+            print("done")
+            
+            if filepath:
+                print("resetting")
+                self.reset()
+                print("done")
+
+                with open(filepath, "rb") as f:
+                    try:
+                        f.seek(STARTER_DECK_OFFSET)
+                        self.deck_data = bytearray(f.read(17*41*2)) # 17 starter decks, each 41 bytes
+                        f.seek(CPU_DECK_OFFSET)
+                        self.deck_data += f.read(24*41*2) # 24 CPU decks
+                        self.default_path = filepath
+
+                        for i in range(17):
+                            leader_byte1, leader_byte2 = struct.unpack_from("BB", self.deck_data, i*41*2)
+                            rank = leader_byte2 >> 4
+                            leader = ((leader_byte2 & 0x0F) << 8) + leader_byte1
+                            deck = YugiohDeckEntry(starter=True, number=i, offset=STARTER_DECK_OFFSET+i*41*2)
+                            cardname = get_name(leader)
+                            deck.setText("[Starter] {0:>7} [rank:{1:>2}] {2}".format(leader, rank, cardname))
+                            self.deck_list.addItem(deck)
+
+                        for i in range(17, 17+24):
+                            leader_byte1, leader_byte2 = struct.unpack_from("BB", self.deck_data, i*41*2)
+                            rank = leader_byte2 >> 4
+                            leader = ((leader_byte2 & 0x0F) << 8) + leader_byte1
+                            deck = YugiohDeckEntry(starter=False, number=i, offset=CPU_DECK_OFFSET +i*41*2
+                            cardname = get_name(leader)
+                            deck.setText("[CPU] {0:>7} [rank:{1:>1}] {2}".format(leader, rank,cardname))
+                            self.deck_list.addItem(deck)
+
+                        print("loaded decks")
+                    except Exception as error:
+                        print("error", error)
+        except Exception as er:
+            print("errrorrr", error)
+            traceback.print_exc()
+            
+        print("loaded")
 
     def action_listwidget_change_item(self, current, previous):
         try:
@@ -250,3 +292,99 @@ class DeckEditorMainWindow(QMainWindow):
                 set_default_path(filepath)
         else:
             pass # no level loaded, do nothing
+
+    def setup_ui(self):
+        self.setObjectName("MainWindow")
+        self.resize(820, 760)
+        self.setMinimumSize(QSize(720, 560))
+        self.setWindowTitle("Yugioh Duelist of Roses - Deck Edit")
+
+        self.centralwidget = QWidget(self)
+        self.centralwidget.setObjectName("centralwidget")
+        self.setCentralWidget(self.centralwidget)
+
+        self.horizontalLayout = QHBoxLayout(self.centralwidget)
+        self.horizontalLayout.setObjectName("horizontalLayout")
+
+        self.deck_list = QListWidget(self.centralwidget)
+        self.horizontalLayout.addWidget(self.deck_list)
+
+        self.vertLayoutWidget = QWidget(self.centralwidget)
+        self.verticalLayout = QVBoxLayout(self.vertLayoutWidget)
+        self.button_set_deck = QPushButton(self.centralwidget)
+
+        self.button_set_deck.setText("Set Deck")
+
+        self.leader_layoutwidget = QWidget(self.centralwidget)
+        self.leader_layout = QHBoxLayout(self.leader_layoutwidget)
+        self.leader_layoutwidget.setLayout(self.leader_layout)
+        self.lineedit_leader = QLineEdit(self.centralwidget)
+        self.leader_label = QLabel(self.centralwidget)
+
+        self.leader_layout.addWidget(self.lineedit_leader)
+        self.leader_layout.addWidget(self.leader_label)
+
+        self.lineedit_leader_rank = QLineEdit(self.centralwidget)
+
+        for widget in (self.button_set_deck, self.leader_layoutwidget, self.lineedit_leader_rank):
+            self.verticalLayout.addWidget(widget)
+        
+        self.cards_scroll = QScrollArea(self.centralwidget)
+        self.cards_scroll.setWidgetResizable(True)
+
+        self.card_slots = []
+        self.cards_verticalWidget = QWidget(self.centralwidget)
+
+        self.cards_vertical = QVBoxLayout(self.centralwidget)
+        self.cards_verticalWidget.setLayout(self.cards_vertical)
+        self.cards_scroll.setWidget(self.cards_verticalWidget)
+
+        for i in range(40):
+            layoutwidget = QWidget(self.centralwidget)
+            layout = QHBoxLayout(layoutwidget)
+            layoutwidget.setLayout(layout)
+
+            index_text = QLabel(self.centralwidget)
+            index_text.setText("{0:>2}".format(i))
+            textedit = QLineEdit(self.centralwidget)
+            textedit.setMinimumSize(20, 20)
+            textedit.setMaximumSize(100, 5000)
+            card_name_text = QLabel(self.centralwidget)
+            card_name_text.setText("---")
+            card_name_text.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+
+            layout.addWidget(index_text)
+            layout.addWidget(textedit)
+            layout.addWidget(card_name_text)
+            self.card_slots.append((textedit, index_text, card_name_text, layout, layoutwidget))
+
+            self.cards_vertical.addWidget(layoutwidget)
+
+        self.verticalLayout.addWidget(self.cards_scroll)
+        self.horizontalLayout.addWidget(self.vertLayoutWidget)
+
+        self.menubar = self.menuBar()
+        self.file_menu = self.menubar.addMenu("File")
+        self.file_menu.setObjectName("menuLoad")
+
+        self.file_load_action = QAction("Load", self)
+        self.file_load_action.triggered.connect(self.button_load_decks)
+        self.file_menu.addAction(self.file_load_action)
+        self.file_save_action = QAction("Save", self)
+        self.file_save_action.triggered.connect(self.button_save_decks)
+        self.file_menu.addAction(self.file_save_action)
+
+        self.statusbar = QStatusBar(self)
+        self.statusbar.setObjectName("statusbar")
+        self.setStatusBar(self.statusbar)
+
+        print("done")
+
+if __name__ == "__main__":
+    import sys
+    app = QApplication(sys.argv)
+    bw_gui = DeckEditorMainWindow()
+    bw_gui.show()
+    err_code = app.exec()
+    #traceback.print_exc()
+    sys.exit(err_code)
